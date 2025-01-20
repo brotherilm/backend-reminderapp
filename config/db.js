@@ -14,8 +14,6 @@ export async function connectToDatabase() {
 
   try {
     await client.connect();
-    console.log("MongoDB connected successfully");
-
     // Kembalikan hanya client untuk digunakan di route lain
     return client;
   } catch (error) {

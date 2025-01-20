@@ -1,4 +1,5 @@
 import express from "express";
+import { verifyToken } from "../middleware/jwtToken.js";
 import { register, login } from "../controllers/userController.js";
 import { createAirdrop } from "../controllers/airdrop-data/createAirdrop.js";
 import {
@@ -24,6 +25,13 @@ const router = express.Router();
 
 router.post("/login", login);
 router.post("/register", register);
+
+// subcription
+router.post("/subcription", userSubscription);
+router.get("/subcription", getSubscriptionStatus);
+
+// verify token for all route
+router.use(verifyToken);
 
 // form
 router.post("/create-airdrop", createAirdrop);
@@ -52,9 +60,5 @@ router.post("/attempt", attemptAirdrop);
 // Global Time
 router.post("/time", Countdown);
 router.get("/time", getCountdown);
-
-// subcription
-router.post("/subcription", userSubscription);
-router.get("/subcription", getSubscriptionStatus);
 
 export default router;

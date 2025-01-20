@@ -7,6 +7,9 @@ export async function editNote(req, res) {
     const database = client.db("airdrop");
     const collection = database.collection("users");
 
+    // Get userId from JWT token that was decoded in verifyToken middleware
+    const tokenUserId = req.user.userId;
+
     const { _id, airdropId, totalSpend, additionalNote } = req.body;
 
     if (!_id || !airdropId) {
@@ -23,6 +26,28 @@ export async function editNote(req, res) {
     }
 
     const objectId = new ObjectId(_id);
+
+    // Verify that the requesting user matches the user they're trying to modify
+    if (tokenUserId !== _id) {
+      return res.status(403).json({
+        message: "Not authorized to create airdrop for this user",
+      });
+    }
+
+    // Cari user berdasarkan ObjectId tertentu
+    const user = await collection.findOne({ _id: objectId });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Additional validation to double-check user ownership
+    if (user._id.toString() !== tokenUserId) {
+      return res.status(403).json({
+        message: "Token user ID does not match requested user ID",
+      });
+    }
+
     const objectAirdropId = new ObjectId(airdropId);
 
     const result = await collection.updateOne(

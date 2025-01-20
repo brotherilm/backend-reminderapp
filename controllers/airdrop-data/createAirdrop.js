@@ -7,6 +7,9 @@ export async function createAirdrop(req, res) {
     const database = client.db("airdrop");
     const collection = database.collection("users");
 
+    // Get userId from JWT token that was decoded in verifyToken middleware
+    const tokenUserId = req.user.userId;
+
     const { _id, name, timer } = req.body;
 
     if (!_id || !name || !timer) {
@@ -22,32 +25,54 @@ export async function createAirdrop(req, res) {
 
     const objectId = new ObjectId(_id);
 
+    // Verify that the requesting user matches the user they're trying to modify
+    if (tokenUserId !== _id) {
+      return res.status(403).json({
+        message: "Not authorized to create airdrop for this user",
+      });
+    }
+
     // Cari user berdasarkan ObjectId tertentu
     const user = await collection.findOne({ _id: objectId });
 
-    if (user) {
-      // Membuat ID khusus untuk airdrop
-      const airdropId = new ObjectId();
-
-      // Tambahkan catatan ke user yang ditemukan, dengan ID baru untuk airdrop
-      const result = await collection.updateOne(
-        { _id: objectId },
-        {
-          $push: {
-            additionalAirdrop: {
-              airdropId, // ID baru untuk airdrop
-              name,
-              timer,
-            },
-          },
-        }
-      );
-
-      res.status(201).json(result);
-    } else {
-      res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
+
+    // Additional validation to double-check user ownership
+    if (user._id.toString() !== tokenUserId) {
+      return res.status(403).json({
+        message: "Token user ID does not match requested user ID",
+      });
+    }
+
+    // Membuat ID khusus untuk airdrop
+    const airdropId = new ObjectId();
+
+    // Tambahkan catatan ke user yang ditemukan, dengan ID baru untuk airdrop
+    const result = await collection.updateOne(
+      { _id: objectId },
+      {
+        $push: {
+          additionalAirdrop: {
+            airdropId, // ID baru untuk airdrop
+            name,
+            timer,
+          },
+        },
+      }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Airdrop created successfully",
+      result,
+    });
   } catch (error) {
-    res.status(500).send(error.toString());
+    res.status(500).json({
+      success: false,
+      message: "Error creating airdrop",
+      error: error.toString(),
+    });
   }
 }

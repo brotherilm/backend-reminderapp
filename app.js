@@ -2,11 +2,27 @@ import dotenv from "dotenv";
 dotenv.config();
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit"; // Import express-rate-limit
 import userRoutes from "./routes/route.js";
 import { connectToDatabase } from "./config/db.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
+
+// Set up rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 menit
+  max: 100, // Maksimal 100 request per IP dalam waktu 15 menit
+  message: "Too many requests from this IP, please try again after 15 minutes",
+  headers: true, // Menyertakan header "X-RateLimit" pada response
+});
+
+// Apply rate limiting to all routes
+app.use(limiter);
+
+// Use Helmet middleware for security headers
+app.use(helmet());
 
 // CORS middleware
 app.use(

@@ -1,15 +1,23 @@
 import { connectToDatabase } from "../../config/db.js";
 import { ObjectId } from "mongodb";
+import validator from "validator";
 
-// Add Link
+// Simple sanitize untuk text input (bukan URL)
+const sanitizeInput = (input) => {
+  if (typeof input !== "string") return input;
+  return validator.escape(input.trim());
+};
+
 export async function addLink(req, res) {
   try {
     const client = await connectToDatabase();
     const database = client.db("airdrop");
     const collection = database.collection("users");
 
-    const { _id, airdropId, label, url } = req.body;
+    const tokenUserId = req.user.userId;
+    let { _id, airdropId, label, url } = req.body;
 
+    // Basic validation
     if (
       !_id ||
       !ObjectId.isValid(_id) ||
@@ -19,16 +27,30 @@ export async function addLink(req, res) {
       return res.status(400).json({ message: "Invalid or missing _id" });
     }
 
+    // Sanitize label saja, url dibiarkan apa adanya
+    label = sanitizeInput(label);
+
     const objectId = new ObjectId(_id);
+
+    // Authorization check
+    if (tokenUserId !== _id) {
+      return res.status(403).json({
+        message: "Not authorized to create airdrop for this user",
+      });
+    }
+
     const objectAirdropId = new ObjectId(airdropId);
 
     const result = await collection.updateOne(
-      { _id: objectId, "additionalAirdrop.airdropId": objectAirdropId },
+      {
+        _id: objectId,
+        "additionalAirdrop.airdropId": objectAirdropId,
+      },
       {
         $push: {
           "additionalAirdrop.$.additionalLinks": {
-            label: label,
-            url: url,
+            label,
+            url,
           },
         },
       }
@@ -40,21 +62,26 @@ export async function addLink(req, res) {
       });
     }
 
-    res.status(201).json({ message: "Link added successfully", result });
+    res.status(201).json({
+      message: "Link added successfully",
+      modifiedCount: result.modifiedCount,
+    });
   } catch (error) {
-    res.status(500).send(error.toString());
+    console.error("Error in addLink:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 }
 
-// Edit Link
 export async function editLink(req, res) {
   try {
     const client = await connectToDatabase();
     const database = client.db("airdrop");
     const collection = database.collection("users");
 
-    const { _id, airdropId, index, label, url } = req.body;
+    const tokenUserId = req.user.userId;
+    let { _id, airdropId, index, label, url } = req.body;
 
+    // Basic validation
     if (
       !_id ||
       !ObjectId.isValid(_id) ||
@@ -62,34 +89,49 @@ export async function editLink(req, res) {
       !ObjectId.isValid(airdropId) ||
       index == null
     ) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or missing _id or index" });
+      return res.status(400).json({ message: "Invalid or missing parameters" });
     }
 
     const objectId = new ObjectId(_id);
+
+    // Authorization check
+    if (tokenUserId !== _id) {
+      return res.status(403).json({
+        message: "Not authorized to modify this user's data",
+      });
+    }
+
     const objectAirdropId = new ObjectId(airdropId);
 
     const updateQuery = {};
-    if (label !== undefined)
+    if (label !== undefined) {
       updateQuery["additionalAirdrop.$.additionalLinks." + index + ".label"] =
-        label;
-    if (url !== undefined)
+        sanitizeInput(label);
+    }
+    if (url !== undefined) {
       updateQuery["additionalAirdrop.$.additionalLinks." + index + ".url"] =
         url;
+    }
 
     const result = await collection.updateOne(
-      { _id: objectId, "additionalAirdrop.airdropId": objectAirdropId },
+      {
+        _id: objectId,
+        "additionalAirdrop.airdropId": objectAirdropId,
+      },
       { $set: updateQuery }
     );
 
     if (result.modifiedCount > 0) {
-      res.status(200).json({ message: "Link edited successfully", result });
+      res.status(200).json({
+        message: "Link edited successfully",
+        modifiedCount: result.modifiedCount,
+      });
     } else {
       res.status(404).json({ message: "User or link not found" });
     }
   } catch (error) {
-    res.status(500).send(error.toString());
+    console.error("Error in editLink:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -99,6 +141,9 @@ export async function deleteLink(req, res) {
     const client = await connectToDatabase();
     const database = client.db("airdrop");
     const collection = database.collection("users");
+
+    // Get userId from JWT token that was decoded in verifyToken middleware
+    const tokenUserId = req.user.userId;
 
     const { _id, airdropId, index } = req.body;
 
@@ -116,6 +161,28 @@ export async function deleteLink(req, res) {
     }
 
     const objectId = new ObjectId(_id);
+
+    // Verify that the requesting user matches the user they're trying to modify
+    if (tokenUserId !== _id) {
+      return res.status(403).json({
+        message: "Not authorized to create airdrop for this user",
+      });
+    }
+
+    // Cari user berdasarkan ObjectId tertentu
+    const user = await collection.findOne({ _id: objectId });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Additional validation to double-check user ownership
+    if (user._id.toString() !== tokenUserId) {
+      return res.status(403).json({
+        message: "Token user ID does not match requested user ID",
+      });
+    }
+
     const objectAirdropId = new ObjectId(airdropId);
 
     // Menghapus link pada index tertentu menggunakan $unset
