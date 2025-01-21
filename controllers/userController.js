@@ -129,7 +129,7 @@ export async function login(req, res) {
 
     if (!user) {
       return res.status(401).json({
-        message: "Invalid credentials",
+        message: "User Not Found",
       });
     }
 
@@ -152,14 +152,6 @@ export async function login(req, res) {
     const token = generateToken({
       userId: user._id.toString(),
       email: user.email,
-    });
-
-    // Set the token in HttpOnly cookie
-    res.cookie("authToken", token, {
-      httpOnly: true, // Prevent access from JavaScript
-      secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS in production
-      sameSite: "Strict", // Protect against CSRF
-      maxAge: 14400000, // Cookie will expire in 4 hours (4 * 60 * 60 * 1000 = 14400000 milliseconds)
     });
 
     // Send response without password

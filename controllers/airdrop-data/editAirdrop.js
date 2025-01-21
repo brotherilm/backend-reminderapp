@@ -15,8 +15,6 @@ export async function editAirdrop(req, res) {
     const database = client.db("airdrop");
     const collection = database.collection("users");
 
-    const tokenUserId = req.user.userId;
-
     let {
       _id,
       airdropId,
@@ -58,13 +56,6 @@ export async function editAirdrop(req, res) {
     const objectId = new ObjectId(_id);
     const objectAirdropId = new ObjectId(airdropId);
 
-    // Verifikasi user
-    if (tokenUserId !== _id) {
-      return res.status(403).json({
-        message: "Not authorized to modify this airdrop",
-      });
-    }
-
     // Update dengan data yang sudah diproses
     const result = await collection.updateOne(
       {
@@ -105,9 +96,6 @@ export async function deleteAirdrop(req, res) {
     const database = client.db("airdrop");
     const collection = database.collection("users");
 
-    // Get userId from JWT token that was decoded in verifyToken middleware
-    const tokenUserId = req.user.userId;
-
     const { _id, airdropId } = req.body;
 
     // Perbaikan validasi parameter
@@ -126,25 +114,11 @@ export async function deleteAirdrop(req, res) {
 
     const objectId = new ObjectId(_id);
 
-    // Verify that the requesting user matches the user they're trying to modify
-    if (tokenUserId !== _id) {
-      return res.status(403).json({
-        message: "Not authorized to create airdrop for this user",
-      });
-    }
-
     // Cari user berdasarkan ObjectId tertentu
     const user = await collection.findOne({ _id: objectId });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
-    }
-
-    // Additional validation to double-check user ownership
-    if (user._id.toString() !== tokenUserId) {
-      return res.status(403).json({
-        message: "Token user ID does not match requested user ID",
-      });
     }
 
     const objectAirdropId = new ObjectId(airdropId);
